@@ -57,6 +57,9 @@ pub enum Error {
     #[error("Parse datetime string error: {0}")]
     ParseDateTimeStringError(String),
 
+    #[error("Failed to decode file '{0}': {1}")]
+    DecodeFile(String, String),
+
     #[error(
         "Failed to get proxy agent aggregate status (server error: {0}; status file error: {1})"
     )]
@@ -64,6 +67,9 @@ pub enum Error {
 
     #[error("Failed to enqueue telemetry event with error: {0}")]
     EnqueueEvent(String),
+
+    #[error("InvalidInput: {0}")]
+    InvalidInput(String),
 }
 
 #[derive(Debug, thiserror::Error)]

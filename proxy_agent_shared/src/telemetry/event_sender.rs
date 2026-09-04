@@ -108,7 +108,11 @@ impl EventSender {
             let mut add_more_events = true;
             while !TELEMETRY_EVENT_QUEUE.is_empty() && add_more_events {
                 match TELEMETRY_EVENT_QUEUE.pop() {
-                    Ok(event) => {
+                    Ok(mut event) => {
+                        // Redact only in this sequential background consumer.
+                        // Producers stay off the blocking regex path.
+                        event.redact_secrets();
+
                         telemetry_data.add_event(event.clone());
 
                         if telemetry_data.get_size() >= MAX_MESSAGE_SIZE {
@@ -148,9 +152,11 @@ impl EventSender {
         }
 
         let event_count = telemetry_data.event_count();
-        for _ in [0; 5] {
+        // convert telemetry data to xml before looping to avoid recomputing the xml payload multiple times
+        let xml_data = telemetry_data.to_xml();
+        for retry in 0..5 {
             match wire_server_client
-                .send_telemetry_data(telemetry_data.to_xml())
+                .send_telemetry_data(xml_data.clone())
                 .await
             {
                 Ok(()) => {
@@ -158,17 +164,21 @@ impl EventSender {
                         LoggerLevel::Trace,
                         format!("Successfully sent {event_count} telemetry events to wire server."),
                     );
-                    break;
+                    return;
                 }
                 Err(e) => {
                     logger_manager::write_warn(format!(
-                        "Failed to send telemetry data to host with error: {e}"
+                        "[Retry {retry}] Failed to send telemetry data to host with error: {e}"
                     ));
                     // wait 15 seconds and retry
                     tokio::time::sleep(Duration::from_secs(15)).await;
                 }
             }
         }
+        // Dev debug log the telemetry data to help with troubleshooting
+        // Log once after all the retries have failed to avoid spamming the logs with large telemetry data
+        // Note: This log must at Trace level, so the xml data will not send to telemetry event again.
+        logger_manager::write_log(LoggerLevel::Trace, xml_data.clone());
     }
 }
 

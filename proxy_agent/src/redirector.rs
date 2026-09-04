@@ -45,6 +45,8 @@ mod windows;
 #[cfg(not(windows))]
 mod linux;
 
+mod shared_ebpf;
+
 use crate::common::error::BpfErrorType;
 use crate::common::error::Error;
 use crate::common::helpers;
@@ -75,6 +77,23 @@ pub use linux::BpfObject;
 #[cfg(windows)]
 pub use windows::BpfObject;
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[repr(u32)]
+pub enum AddressFamily {
+    #[default]
+    IPv4 = 4,
+    IPv6 = 6,
+}
+
+impl AddressFamily {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::IPv4 => "IPv4",
+            Self::IPv6 => "IPv6",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[repr(C)]
 pub struct AuditEntry {
@@ -83,6 +102,8 @@ pub struct AuditEntry {
     pub is_admin: i32,
     pub destination_ipv4: u32, // in network byte order
     pub destination_port: u16, // in network byte order
+    #[serde(default)]
+    pub address_family: AddressFamily,
 }
 
 impl AuditEntry {
@@ -93,6 +114,7 @@ impl AuditEntry {
             is_admin: 0,
             destination_ipv4: 0,
             destination_port: 0,
+            address_family: AddressFamily::IPv4,
         }
     }
 
